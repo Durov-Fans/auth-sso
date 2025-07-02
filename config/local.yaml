@@ -1,0 +1,6 @@
+env: "local"
+database_url: "postgres://postgres:postgres@localhost:5432/postgres"
+token_ttl: 1h
+grpc:
+  port: 8080
+  timeout: 10h
