@@ -22,7 +22,7 @@ func New(log *slog.Logger, port int) *App {
 	return &App{log, gRPCServer, port}
 
 }
-func (a *App) MustRu() {
+func (a *App) MustRun() {
 	if err := a.Run(); err != nil {
 		panic(err)
 	}
@@ -47,7 +47,7 @@ func (a *App) Run() error {
 
 func (a *App) Stop() {
 	const op = "grpcApp.Stop"
-
+	a.log.Info("shutting down")
 	a.log.With(slog.String("op", op)).Info("stopping")
 
 	a.gRPCServer.GracefulStop()

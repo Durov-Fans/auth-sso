@@ -2,18 +2,21 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"github.com/ilyakaznacheev/cleanenv"
 	"os"
+	"time"
 )
 
 type Config struct {
-	Env          string     `yaml:"env" env-default:"local"`
-	Database_url string     `yaml:"database_url" env-required:"true"`
-	GRPC         GRPCConfig `yaml:"grpc" env-required:"true"`
+	Env          string        `yaml:"env" env-default:"local"`
+	Database_url string        `yaml:"database_url" env-required:"true"`
+	GRPC         GRPCConfig    `yaml:"grpc" env-required:"true"`
+	TokenTTL     time.Duration `yaml:"token_ttl" env-default:"5h"`
 }
 
 type GRPCConfig struct {
-	Port    string `yaml:"port" env-default:"8080"`
+	Port    int    `yaml:"port" env-default:"8080"`
 	Timeout string `yaml:"timeout" env-default:"5h"`
 }
 
@@ -46,7 +49,7 @@ func fetchConfigPath() string {
 	if res == "" {
 		res = os.Getenv("CONFIG_PATH")
 	}
-
+	fmt.Println(res)
 	return res
 
 }

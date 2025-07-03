@@ -2,7 +2,6 @@ package app
 
 import (
 	"auth-service/internal/app/grpc"
-	"google.golang.org/grpc"
 	"log/slog"
 	"time"
 )
