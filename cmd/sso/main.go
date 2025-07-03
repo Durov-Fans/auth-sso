@@ -13,19 +13,19 @@ const (
 
 func main() {
 	cfg := config.MustLoad()
-	log := SetupLogger(cfg.Env)
+	log := setupLogger(cfg.Env)
 
 	log.Info("Loading config")
 	fmt.Println(cfg)
 
 }
 
-func SetupLogger(env string) *slog.Logger {
+func setupLogger(env string) *slog.Logger {
 	var log *slog.Logger
 	switch env {
 	case envLocal:
 		log = slog.New(
-			slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
 	return log
 }
