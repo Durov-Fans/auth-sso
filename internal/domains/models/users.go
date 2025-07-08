@@ -1,7 +1,10 @@
 package models
 
 type User struct {
-	ID       int64
-	Email    string
-	PassHash []byte
+	ID             int64  `json:"id"`
+	FirstName      string `json:"first_name"`
+	LastName       string `json:"last_name"`
+	Username       string `json:"username"`
+	UserNameLocale string
+	PhotoURL       string `json:"photo_url"`
 }
