@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"auth-service/internal/domains/models"
 	"auth-service/internal/storage"
 	"context"
 	"errors"
@@ -18,13 +19,28 @@ type Storage struct {
 	db *pgxpool.Pool
 }
 
-func Open(storagPath string) (*Storage, error) {
+func (s *Storage) App(ctx context.Context, serviceId int32) (models.App, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *Storage) IsAdmin(ctx context.Context, userHash string) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func InitDB(storagPath string) (*Storage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	pgxCfg, err := pgxpool.ParseConfig(storagPath)
 	if err != nil {
-		log.Fatal("❌ Ошибка парсинга строки подключения:", err)
+		log.Fatal(" Ошибка парсинга строки подключения:", err)
 	}
 	pgxCfg.MaxConns = 1
 	pgxCfg.MinConns = 1

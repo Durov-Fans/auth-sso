@@ -1,6 +1,8 @@
 env: "local"
 database_url: "postgres://postgres:postgres@localhost:5432/postgres"
 token_ttl: 1h
+telegram:
+  SECRET_TGID_KEY: bn24C1CCxItpZzmQujm12jo3oe8LkXdaIdwBwLY91j
 grpc:
   port: 8080
   timeout: 10h

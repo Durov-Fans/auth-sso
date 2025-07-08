@@ -2,7 +2,13 @@ package grpcApp
 
 import (
 	authgrpc "auth-service/internal/grpc/auth"
+	"context"
 	"fmt"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"google.golang.org/grpc"
 	"log/slog"
 	"net"
@@ -14,13 +20,37 @@ type App struct {
 	port       int
 }
 
-func New(log *slog.Logger, port int) *App {
-	gRPCServer := grpc.NewServer()
+func New(log *slog.Logger,
+	authService authgrpc.Auth,
+	port int) *App {
+	loggingOpts := []logging.Option{
+		logging.WithLogOnEvents(
+			logging.PayloadReceived, logging.PayloadSent,
+		),
+	}
 
-	authgrpc.Register(gRPCServer)
+	recoveryOpts := []recovery.Option{
+		recovery.WithRecoveryHandler(func(p interface{}) (err error) {
+			log.Error("Recovered from panic", slog.Any("panic", p))
+
+			return status.Errorf(codes.Internal, "internal error")
+		}),
+	}
+
+	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		recovery.UnaryServerInterceptor(recoveryOpts...),
+		logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
+	))
+
+	authgrpc.Register(gRPCServer, authService)
 
 	return &App{log, gRPCServer, port}
 
+}
+func InterceptorLogger(l *slog.Logger) logging.Logger {
+	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
+		l.Log(ctx, slog.Level(lvl), msg, fields...)
+	})
 }
 func (a *App) MustRun() {
 	if err := a.Run(); err != nil {

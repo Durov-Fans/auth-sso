@@ -9,15 +9,19 @@ import (
 )
 
 type Config struct {
-	Env          string        `yaml:"env" env-default:"local"`
-	Database_url string        `yaml:"database_url" env-required:"true"`
-	GRPC         GRPCConfig    `yaml:"grpc" env-required:"true"`
-	TokenTTL     time.Duration `yaml:"token_ttl" env-default:"5h"`
+	Env          string         `yaml:"env" env-default:"local"`
+	Database_url string         `yaml:"database_url" env-required:"true"`
+	GRPC         GRPCConfig     `yaml:"grpc" env-required:"true"`
+	Telegram     TelegramConfig `yaml:"telegram" env-required:"true"`
+	TokenTTL     time.Duration  `yaml:"token_ttl" env-default:"5h"`
 }
 
 type GRPCConfig struct {
 	Port    int    `yaml:"port" env-default:"8080"`
 	Timeout string `yaml:"timeout" env-default:"5h"`
+}
+type TelegramConfig struct {
+	SECRET_TGID_KEY string `yaml:"SECRET_TGID_KEY" env-default:"dop_dop_yes_yes"`
 }
 
 func MustLoad() *Config {

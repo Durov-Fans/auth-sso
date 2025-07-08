@@ -3,6 +3,7 @@ package main
 import (
 	"auth-service/internal/app"
 	"auth-service/internal/config"
+	"auth-service/internal/lib/crypto"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,6 +17,7 @@ const (
 
 func main() {
 	cfg := config.MustLoad()
+	crypto.InitCrypto(cfg.Telegram.SECRET_TGID_KEY)
 	log := setupLogger(cfg.Env)
 
 	log.Info("Loading config")
