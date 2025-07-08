@@ -45,35 +45,11 @@ func New(log *slog.Logger, userSaver UserSaver, userProvider UserProvider, appPr
 	}
 }
 func (a Auth) Login(ctx context.Context, userHash string, serviceId int64) (string, error) {
-	log := a.log.With(slog.String("op", "app.LoginUser"), slog.String("email", email))
+	log := a.log.With(slog.String("op", "app.LoginUser"))
 
 	log.Info("login user")
 
-	if err != nil {
-		if errors.Is(err, storage.ErrUserNotFound) {
-			a.log.Warn("user not found", sl.Err(err))
-			return "", fmt.Errorf("app.LoginUser, %w", ErrInvalidCredentials)
-		}
-
-		a.log.Error("Failed to get user", sl.Err(err))
-
-		return "", fmt.Errorf("app.LoginUser, %w", err)
-	}
-
-	app, err := a.appProvider.App(ctx, serviceId)
-
-	if err != nil {
-		return "", fmt.Errorf("app.LoginUser, %w", err)
-	}
-
-	log.Info("user is logged in")
-
-	token, err := jwt.NewToken(user, app, a.tokenTTL)
-	if err != nil {
-		a.log.Error("Failed to get user", sl.Err(err))
-
-	}
-	return token, nil
+	return "", nil
 }
 func (a Auth) RegisterUser(Hash string, userData string, userNameLocale string, serviceId int64) (token string, err error) {
 
