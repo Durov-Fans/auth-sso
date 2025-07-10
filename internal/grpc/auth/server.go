@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"auth-service/internal/app"
 	"auth-service/internal/lib/jwt"
 	"context"
 	ssov1 "github.com/Durov-Fans/protos/gen/go/sso"
@@ -12,7 +13,7 @@ import (
 type Auth interface {
 	Login(ctx context.Context, userHash string, serviceId int64) (token string, err error)
 	RegisterUser(hash string, userData string, userNameLocale string, serviceId int64) (token string, err error)
-	IsAdmin(ctx context.Context, userId int) (isAdmin bool, err error)
+	IsAdmin(ctx context.Context, userHash int) (isAdmin bool, err error)
 }
 
 type serverApi struct {
@@ -72,7 +73,8 @@ func (s *serverApi) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Ошибка")
 	}
-	return &ssov1.RegisterResponse{Token: jwt.NewToken(user)}, nil
+	app := s.
+	return &ssov1.RegisterResponse{Token: jwt.NewToken(user, app, duration)}, nil
 }
 
 func (s *serverApi) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ssov1.IsAdminResponse, error) {

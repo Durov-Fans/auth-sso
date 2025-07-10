@@ -4,6 +4,7 @@ import (
 	"auth-service/internal/domains/models"
 	"auth-service/internal/storage"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,19 +20,53 @@ type Storage struct {
 	db *pgxpool.Pool
 }
 
-func (s *Storage) App(ctx context.Context, serviceId int32) (models.App, error) {
-	//TODO implement me
-	panic("implement me")
-}
+func (s *Storage) User(ctx context.Context, userHash string) (models.User, error) {
+	_, err := s.db.Begin(ctx)
+	if err != nil {
+		return models.User{}, fmt.Errorf("Transaction Error", err)
+	}
+	var user models.User
+	//TODO Добавить Валидацию и Сериализацию юзера
+	err = s.db.QueryRow(ctx, `SELECT * FROM users WHERE hash = $1`, userHash).Scan(&user.ID, &user.Hash, &user.FirstName, &user.LastName, &user.Username, &user.UserNameLocale, &user.PhotoURL)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.User{}, fmt.Errorf(" Пользователь не найден %s ", storage.ErrAppNotFound)
+		}
 
-func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
-	//TODO implement me
-	panic("implement me")
+		return models.User{}, fmt.Errorf("Ошибка", err)
+	}
 }
 
 func (s *Storage) IsAdmin(ctx context.Context, userHash string) (bool, error) {
-	//TODO implement me
-	panic("implement me")
+	_, err := s.db.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("Transaction Error", err)
+	}
+	var isAdmin bool
+	err = s.db.QueryRow(ctx, `SELECT is_admin FROM users where hash = $1`, userHash).Scan(&isAdmin)
+	if err != nil {
+		return false, fmt.Errorf("IsAdmin Error: %v", err)
+	}
+	fmt.Println(isAdmin)
+	return isAdmin, nil
+}
+
+func (s *Storage) App(ctx context.Context, serviceId int32) (models.App, error) {
+	_, err := s.db.Begin(ctx)
+	if err != nil {
+		return models.App{}, err
+	}
+	var app models.App
+	err = s.db.QueryRow(ctx, `SELECT * FROM apps WHERE id = $1`, serviceId).Scan(&app.ID, &app.Name, &app.Secret)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.App{}, fmt.Errorf(" Клиент сервис не найден %s ", storage.ErrAppNotFound)
+		}
+
+		return models.App{}, fmt.Errorf(" Ошибка", err)
+	}
+
+	return app, nil
 }
 
 func InitDB(storagPath string) (*Storage, error) {
@@ -51,11 +86,9 @@ func InitDB(storagPath string) (*Storage, error) {
 		return nil, err
 	}
 
-	log.Println("✅ Подключение к PostgreSQL успешно")
+	log.Println("Подключение к PostgresSQL успешно")
 	fmt.Println("ready")
 	return &Storage{db: pool}, nil
-
-	// Жёстко задаём ограничения
 
 }
 

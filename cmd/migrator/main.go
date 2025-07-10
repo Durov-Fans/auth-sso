@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/golang-migrate/migrate/v4"
@@ -21,8 +22,19 @@ func main() {
 		panic("migrationPath is required")
 	}
 
-	_, err := migrate.New("file://"+migrationPath, fmt.Sprintf("postgres://%s", database_url))
+	m, err := migrate.New("file://"+migrationPath, fmt.Sprintf("postgres://%s", database_url))
+
 	if err != nil {
+		panic(err)
+	}
+
+	if err := m.Up(); err != nil {
+		if errors.Is(err, migrate.ErrNoChange) {
+			fmt.Println("no migrations to apply")
+
+			return
+		}
+
 		panic(err)
 	}
 

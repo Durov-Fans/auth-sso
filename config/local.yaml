@@ -1,5 +1,5 @@
 env: "local"
-database_url: "postgres://postgres:postgres@localhost:5432/postgres"
+database_url: "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 token_ttl: 1h
 telegram:
   SECRET_TGID_KEY: bn24C1CCxItpZzmQujm12jo3oe8LkXdaIdwBwLY91j

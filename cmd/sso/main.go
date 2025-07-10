@@ -24,7 +24,7 @@ func main() {
 
 	application := app.New(log, cfg.GRPC.Port, cfg.Database_url, cfg.TokenTTL)
 
-	application.GRPCServer.MustRun()
+	go application.GRPCServer.MustRun()
 	fmt.Println(cfg)
 
 	stop := make(chan os.Signal, 1)
