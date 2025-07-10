@@ -96,7 +96,7 @@ func (s *Storage) Close() {
 	s.db.Close()
 }
 
-func (s Storage) SaveUser(ctx context.Context, id int64, firstName string, lastName string, userName string, photoUrl string, isAdmin bool) error {
+func (s *Storage) SaveUser(ctx context.Context, id int64, firstName string, lastName string, userName string, photoUrl string, isAdmin bool) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return status.Error(codes.Internal, "Ошибка начала транзакции")
