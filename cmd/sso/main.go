@@ -22,7 +22,7 @@ func main() {
 
 	log.Info("Loading config")
 
-	application := app.New(log, cfg.GRPC.Port, cfg.Database_url, cfg.TokenTTL)
+	application := app.New(log, cfg.GRPC.Port, cfg.Database_url, cfg.TokenTTL, cfg.Telegram.TG_BOT_KEY)
 
 	go application.GRPCServer.MustRun()
 	fmt.Println(cfg)

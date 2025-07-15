@@ -7,19 +7,12 @@ import (
 	"auth-service/internal/lib/logger/sl"
 	"auth-service/internal/storage"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
+
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
+	initdata "github.com/telegram-mini-apps/init-data-golang"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"net/http"
-	"net/url"
-	"sort"
-	"strconv"
-	"strings"
 
 	"log/slog"
 	"time"
@@ -31,84 +24,133 @@ type Auth struct {
 	userProvider UserProvider
 	appProvider  AppProvider
 	tokenTTL     time.Duration
+	tgToken      string
 }
 type UserSaver interface {
-	SaveUser(ctx context.Context, id int64, firstName string, lastName string, userName string, photoUrl string, isAdmin bool) error
+	SaveUser(ctx context.Context, tgId string, User models.User) error
 }
 
 type UserProvider interface {
-	User(ctx context.Context, userHash string) (models.User, error)
 	IsAdmin(ctx context.Context, userHash string) (isAdmin bool, err error)
+	ValidateUser(ctx context.Context, userHash string) error
 }
 type AppProvider interface {
-	App(ctx context.Context, serviceId int32) (models.App, error)
+	App(ctx context.Context, serviceId int64) (models.App, error)
 }
 
 var (
 	ErrInvalidCredentials = errors.New("invalid Credentials")
 	ErrInvalidApp         = errors.New("invalid App")
 )
-var secretKey = GenerateSecretKey("7901019694:AAEjOz9nQNZkmtByby8QljOehunWLez2xCk")
 
-const MaxTimeDiff = 300
+func New(log *slog.Logger, userSaver UserSaver, userProvider UserProvider, appProvider AppProvider, tokenTTL time.Duration, tgToken string) *Auth {
 
-func New(log *slog.Logger, userSaver UserSaver, userProvider UserProvider, appProvider AppProvider, tokenTTL time.Duration) *Auth {
 	return &Auth{
-		log, userSaver, userProvider, appProvider, tokenTTL,
+		log, userSaver, userProvider, appProvider, tokenTTL, tgToken,
 	}
 }
-func GenerateSecretKey(botToken string) []byte {
-	mac := hmac.New(sha256.New, []byte("WebAppData"))
-	mac.Write([]byte(botToken))
-	return mac.Sum(nil)
-}
 
-func (a Auth) Login(ctx context.Context, userHash string, serviceId int64) (string, error) {
+func (a Auth) ValidateUser(ctx context.Context, userHash string, serviceId int64) (string, error) {
 	log := a.log.With(slog.String("op", "app.LoginUser"))
 
 	log.Info("login user")
-	if err := ValidateInitData(userHash); err != nil {
-
+	expIn := 24 * time.Hour
+	if err := initdata.Validate(userHash, a.tgToken, expIn); err != nil {
 		return "", status.Errorf(codes.Internal, "internal error")
 	}
-	tgHash, err := crypto.HashTgID()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	userDecodeHash, err := initdata.Parse(userHash)
+
+	app, err := a.appProvider.App(ctx, serviceId)
+	tgHash, err := crypto.HashTgID(userDecodeHash.User.ID)
 
 	if err != nil {
-		http.Error(w, "Ошибка начала транзакции", http.StatusInternalServerError)
-		return
+		return "", status.Errorf(codes.Internal, "Ошибка хеширования")
 	}
-	defer tx.Rollback(ctx)
+	err = a.userProvider.ValidateUser(ctx, tgHash)
+	if err != nil {
+		return "", err
+	}
+	token, err := jwt.NewToken(tgHash, app, a.tokenTTL)
+	if err != nil {
+		return "", status.Errorf(codes.Internal, "Ошибка генерации токена")
 
-	return "", nil
+	}
+	return token, nil
 }
-func (a Auth) RegisterUser(Hash string, userData string, userNameLocale string, serviceId int64) (token string, err error) {
 
-	log := a.log.With(slog.String("op", "app.RegisterUser"), slog.String("email", email))
+//func (s *Storage) User(ctx context.Context, userHash string) (models.User, error) {
+//	_, err := s.db.Begin(ctx)
+//	if err != nil {
+//		return models.User{}, fmt.Errorf("Transaction Error", err)
+//	}
+//	var user models.User
+//	//TODO Добавить Валидацию и Сериализацию юзера
+//	err = s.db.QueryRow(ctx, `SELECT * FROM users WHERE hash = $1`, userHash).Scan(&user.ID, &user.Hash, &user.FirstName, &user.LastName, &user.Username, &user.UserNameLocale, &user.PhotoURL)
+//	if err != nil {
+//		if errors.Is(err, sql.ErrNoRows) {
+//			return models.User{}, fmt.Errorf(" Пользователь не найден %s ", storage.ErrAppNotFound)
+//		}
+//
+//		return models.User{}, fmt.Errorf("Ошибка", err)
+//	}
+//	return user, nil
+//}
 
-	log.Info("register user")
+func (a Auth) RegisterUser(ctx context.Context, userHash string, userNameLocale string, serviceId int64) (string, error) {
 
-	passHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	log := a.log.With(slog.String("op", "app.RegisterUser"), slog.Int("serviceId", int(serviceId)))
+
+	log.Info("Регистрация")
+
+	err := initdata.Validate(userHash, a.tgToken, 0)
+	if err != nil {
+		log.Error("Ошибка валидации", err)
+		return "", status.Errorf(codes.Unauthenticated, "Токен не прошел валидацию")
+	}
+	userDecodeHash, err := initdata.Parse(userHash)
 
 	if err != nil {
-		log.Error("Failed to hash password", sl.Err(err))
-
-		return 0, fmt.Errorf("app.RegisterUser, %w", err)
+		log.Error("Ошибка десереализации")
+		return "", status.Errorf(codes.Internal, "internal error")
 	}
 
-	id, err := a.userSaver.SaveUser(ctx, email, passHash)
+	tgHash, err := crypto.HashTgID(userDecodeHash.User.ID)
 	if err != nil {
-		log.Error("Failed to save user", sl.Err(err))
-		return 0, fmt.Errorf("app.RegisterUser, %w", err)
-	}
-	log.Info("User register")
+		log.Error("ошибка хеширования тг айди", sl.Err(err))
 
-	return id, nil
+		return "", status.Errorf(codes.Internal, "Ошибка хеширования")
+	}
+	User := models.User{
+		ID:             tgHash,
+		FirstName:      userDecodeHash.User.FirstName,
+		LastName:       userDecodeHash.User.LastName,
+		PhotoURL:       userDecodeHash.User.PhotoURL,
+		Hash:           userHash,
+		UserNameLocale: userNameLocale,
+		Username:       userDecodeHash.User.Username,
+		IsAdmin:        false,
+	}
+	err = a.userSaver.SaveUser(ctx, tgHash, User)
+	if err != nil {
+		log.Error("Ошибка сохранениня юзера", sl.Err(err))
+		return "", status.Errorf(codes.Internal, "internal error")
+	}
+	log.Info("asdasdadafasdfsaf")
+
+	app, err := a.appProvider.App(ctx, serviceId)
+
+	log.Info("Пользователь зарегистрирован")
+
+	token, err := jwt.NewToken(User.ID, app, a.tokenTTL)
+	if err != nil {
+		log.Error("Ошибка генерации токена", sl.Err(err))
+		status.Errorf(codes.Internal, "Ошибка генерации токена")
+	}
+	log.Info("asdasddasdds")
+	return token, nil
 }
 func (a Auth) IsAdmin(ctx context.Context, userHash string) (bool, error) {
-	log := a.log.With(slog.String("op", "app.IsAdmin"), slog.Int("userId", int(userId)))
+	log := a.log.With(slog.String("op", "app.IsAdmin"), slog.String("userId", userHash))
 
 	log.Info("authorise user")
 
@@ -125,53 +167,4 @@ func (a Auth) IsAdmin(ctx context.Context, userHash string) (bool, error) {
 	}
 
 	return isAdmin, nil
-}
-func ValidateInitData(initData string) error {
-	params, err := url.ParseQuery(initData)
-	if err != nil {
-		return fmt.Errorf("ошибка парсинга initData: %v", err)
-	}
-
-	hash := params.Get("hash")
-	if hash == "" {
-		return errors.New(" hash не найден")
-	}
-
-	fmt.Println("Hash найден:", hash)
-
-	params.Del("hash")
-
-	// Сборка data_check_string
-	var pairs []string
-	for key, values := range params {
-		for _, value := range values {
-			pairs = append(pairs, key+"="+value)
-		}
-	}
-	sort.Strings(pairs)
-	dataCheckString := strings.Join(pairs, "\n")
-
-	// Генерация подписи HMAC
-	h := hmac.New(sha256.New, secretKey)
-	h.Write([]byte(dataCheckString))
-	generatedHash := hex.EncodeToString(h.Sum(nil))
-
-	fmt.Println("🔍 Сгенерированный hash:", generatedHash)
-
-	if generatedHash != hash {
-		return errors.New("❌ Ошибка: hash не совпадает! данные могли быть подделаны")
-	}
-
-	authDateStr := params.Get("auth_date")
-	authDate, err := strconv.ParseInt(authDateStr, 10, 64)
-	if err != nil {
-		return errors.New("❌ Неверный auth_date")
-	}
-
-	currentTime := time.Now().Unix()
-	if currentTime-authDate > MaxTimeDiff {
-		return errors.New("❌ Данные слишком старые")
-	}
-
-	return nil
 }

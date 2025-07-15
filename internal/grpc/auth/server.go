@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"auth-service/internal/app"
-	"auth-service/internal/lib/jwt"
 	"context"
 	ssov1 "github.com/Durov-Fans/protos/gen/go/sso"
 	"google.golang.org/grpc"
@@ -11,9 +9,9 @@ import (
 )
 
 type Auth interface {
-	Login(ctx context.Context, userHash string, serviceId int64) (token string, err error)
-	RegisterUser(hash string, userData string, userNameLocale string, serviceId int64) (token string, err error)
-	IsAdmin(ctx context.Context, userHash int) (isAdmin bool, err error)
+	ValidateUser(ctx context.Context, userHash string, serviceId int64) (token string, err error)
+	RegisterUser(ctx context.Context, userData string, userNameLocale string, serviceId int64) (token string, err error)
+	IsAdmin(ctx context.Context, userHash string) (isAdmin bool, err error)
 }
 
 type serverApi struct {
@@ -25,18 +23,18 @@ func Register(gRPC *grpc.Server, auth Auth) {
 	ssov1.RegisterAuthServer(gRPC, &serverApi{auth: auth})
 }
 
-func (s *serverApi) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.LoginResponse, error) {
+func (s *serverApi) ValidateUser(ctx context.Context, req *ssov1.ValidateRequest) (*ssov1.ValidateResponse, error) {
 	if err := validateLogin(req); err != nil {
 		return nil, err
 	}
-	token, err := s.auth.Login(ctx, req.GetUserHash(), req.GetServiceId())
+	token, err := s.auth.ValidateUser(ctx, req.GetUserHash(), req.GetServiceId())
 	if err != nil {
-		return nil, status.Error(codes.Internal, "Ошибка")
+		return nil, err
 	}
-	return &ssov1.LoginResponse{Token: token}, nil
+	return &ssov1.ValidateResponse{Token: token}, nil
 
 }
-func validateLogin(req *ssov1.LoginRequest) error {
+func validateLogin(req *ssov1.ValidateRequest) error {
 	if req.GetUserHash() == "" {
 		return status.Error(codes.InvalidArgument, "Юзер обязателен")
 	}
@@ -69,12 +67,11 @@ func (s *serverApi) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 		return nil, err
 	}
 
-	user, err := s.auth.RegisterUser(req.GetHash(), req.GetUserData(), req.GetUserNameLocale(), req.GetServiceId())
+	token, err := s.auth.RegisterUser(ctx, req.GetHash(), req.GetUserNameLocale(), req.GetServiceId())
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Ошибка")
 	}
-	app := s.
-	return &ssov1.RegisterResponse{Token: jwt.NewToken(user, app, duration)}, nil
+	return &ssov1.RegisterResponse{Token: token}, nil
 }
 
 func (s *serverApi) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ssov1.IsAdminResponse, error) {

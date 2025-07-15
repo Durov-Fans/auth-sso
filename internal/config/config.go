@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/ilyakaznacheev/cleanenv"
+	"log"
 	"os"
 	"time"
 )
@@ -22,6 +23,7 @@ type GRPCConfig struct {
 }
 type TelegramConfig struct {
 	SECRET_TGID_KEY string `yaml:"SECRET_TGID_KEY" env-default:"dop_dop_yes_yes"`
+	TG_BOT_KEY      string `yaml:"TG_BOT_KEY" env-required:"true"`
 }
 
 func MustLoad() *Config {
@@ -36,8 +38,9 @@ func MustLoad() *Config {
 	}
 
 	var config Config
-
+	log.Printf("Loading config from %s", path)
 	if err := cleanenv.ReadConfig(path, &config); err != nil {
+
 		panic(err)
 	}
 

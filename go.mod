@@ -3,14 +3,14 @@ module auth-service
 go 1.24
 
 require (
-	github.com/Durov-Fans/protos v0.1.2
+	github.com/Durov-Fans/protos v0.1.7
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.2
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jackc/pgx/v5 v5.5.4
 	github.com/lib/pq v1.10.9
-	golang.org/x/crypto v0.39.0
+	github.com/telegram-mini-apps/init-data-golang v1.5.0
 	google.golang.org/grpc v1.73.0
 )
 
@@ -23,6 +23,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
+	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect

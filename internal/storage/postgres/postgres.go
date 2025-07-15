@@ -20,30 +20,46 @@ type Storage struct {
 	db *pgxpool.Pool
 }
 
-func (s *Storage) User(ctx context.Context, userHash string) (models.User, error) {
-	_, err := s.db.Begin(ctx)
+func (s *Storage) ValidateUser(ctx context.Context, userHash string) error {
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return models.User{}, fmt.Errorf("Transaction Error", err)
+		return status.Errorf(codes.Internal, "Ошибка сервера")
 	}
-	var user models.User
-	//TODO Добавить Валидацию и Сериализацию юзера
-	err = s.db.QueryRow(ctx, `SELECT * FROM users WHERE hash = $1`, userHash).Scan(&user.ID, &user.Hash, &user.FirstName, &user.LastName, &user.Username, &user.UserNameLocale, &user.PhotoURL)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return models.User{}, fmt.Errorf(" Пользователь не найден %s ", storage.ErrAppNotFound)
-		}
 
-		return models.User{}, fmt.Errorf("Ошибка", err)
+	defer tx.Rollback(ctx)
+
+	var userHashBD string
+	var userBanned bool
+
+	err = tx.QueryRow(ctx, `
+WITH updated_user AS (
+  UPDATE users 
+  SET last_login = NOW() 
+  WHERE tg_user_hash = $1 
+  RETURNING tg_user_hash, user_banned
+)`, userHash).Scan(&userHashBD, &userBanned)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return status.Errorf(codes.NotFound, " Пользователь не найден %s ", storage.ErrUserNotFound)
 	}
+	if userBanned {
+		return status.Errorf(codes.PermissionDenied, "Пользователь забанен")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return status.Errorf(codes.Internal, "Ошибка комита")
+	}
+
+	return nil
 }
 
 func (s *Storage) IsAdmin(ctx context.Context, userHash string) (bool, error) {
-	_, err := s.db.Begin(ctx)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("Transaction Error", err)
 	}
 	var isAdmin bool
-	err = s.db.QueryRow(ctx, `SELECT is_admin FROM users where hash = $1`, userHash).Scan(&isAdmin)
+	err = tx.QueryRow(ctx, `SELECT is_admin FROM users where hash = $1`, userHash).Scan(&isAdmin)
 	if err != nil {
 		return false, fmt.Errorf("IsAdmin Error: %v", err)
 	}
@@ -51,13 +67,16 @@ func (s *Storage) IsAdmin(ctx context.Context, userHash string) (bool, error) {
 	return isAdmin, nil
 }
 
-func (s *Storage) App(ctx context.Context, serviceId int32) (models.App, error) {
-	_, err := s.db.Begin(ctx)
+func (s *Storage) App(ctx context.Context, serviceId int64) (models.App, error) {
+	tx, err := s.db.Begin(ctx)
+	fmt.Println("dfsdff")
 	if err != nil {
 		return models.App{}, err
 	}
 	var app models.App
-	err = s.db.QueryRow(ctx, `SELECT * FROM apps WHERE id = $1`, serviceId).Scan(&app.ID, &app.Name, &app.Secret)
+	fmt.Println(serviceId)
+	err = tx.QueryRow(ctx, `SELECT * FROM apps WHERE id = $1`, serviceId).Scan(&app.ID, &app.Name, &app.Secret)
+
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.App{}, fmt.Errorf(" Клиент сервис не найден %s ", storage.ErrAppNotFound)
@@ -96,7 +115,7 @@ func (s *Storage) Close() {
 	s.db.Close()
 }
 
-func (s *Storage) SaveUser(ctx context.Context, id int64, firstName string, lastName string, userName string, photoUrl string, isAdmin bool) error {
+func (s *Storage) SaveUser(ctx context.Context, tgId string, User models.User) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return status.Error(codes.Internal, "Ошибка начала транзакции")
@@ -104,12 +123,12 @@ func (s *Storage) SaveUser(ctx context.Context, id int64, firstName string, last
 	defer tx.Rollback(ctx)
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO users (id, first_name, last_name,user_name, last_login, photo_url,is_admin)
-         VALUES ($1, $2, $3,$4, NOW(), $5,$6)`, id, firstName, lastName, userName, photoUrl, isAdmin)
+		`INSERT INTO users (id, first_name, last_name,user_name,user_name_locale, last_login, photo_url,is_admin)
+         VALUES ($1, $2, $3,$4,$5, NOW(), $6,$7)`, tgId, User.FirstName, User.LastName, User.Username, User.UserNameLocale, User.PhotoURL, User.IsAdmin)
 	if err != nil {
 		var pgErr *pq.Error
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return fmt.Errorf("SaveUser", storage.ErrUserExist)
+			return status.Error(codes.Internal, storage.ErrUserExist)
 		}
 		return status.Error(codes.Internal, "Ошибка транзакции")
 	}
@@ -118,5 +137,6 @@ func (s *Storage) SaveUser(ctx context.Context, id int64, firstName string, last
 		return status.Error(codes.Internal, "Ошибка базы данных")
 
 	}
+	log.Println("dfsdf")
 	return nil
 }
