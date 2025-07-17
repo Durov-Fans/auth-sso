@@ -7,6 +7,7 @@ import (
 	"auth-service/internal/lib/logger/sl"
 	"auth-service/internal/storage"
 	"context"
+	"net/http"
 
 	"errors"
 	"fmt"
@@ -50,7 +51,7 @@ func New(log *slog.Logger, userSaver UserSaver, userProvider UserProvider, appPr
 	}
 }
 
-func (a Auth) ValidateUser(ctx context.Context, userHash string, serviceId int64) (string, error) {
+func (a Auth) ValidateUser(ctx context.Context, userHash string, serviceId int64, w http.ResponseWriter) (string, error) {
 	log := a.log.With(slog.String("op", "app.LoginUser"))
 
 	log.Info("login user")

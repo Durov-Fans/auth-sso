@@ -2,12 +2,13 @@ package auth
 
 import (
 	"auth-service/internal/domains/models"
+	"auth-service/internal/services/auth"
 	"context"
 	"encoding/json"
 	"fmt"
-	ssov1 "github.com/Durov-Fans/protos/gen/go/sso"
-	initdata "github.com/telegram-mini-apps/init-data-golang"
-	"google.golang.org/grpc"
+
+	"github.com/gorilla/mux"
+
 	"net/http"
 )
 
@@ -17,16 +18,30 @@ type Auth interface {
 	IsAdmin(ctx context.Context, userHash string) (isAdmin bool, err error)
 }
 
-type serverApi struct {
-	ssov1.UnimplementedAuthServer
-	auth Auth
+type ServerApi struct {
+	services auth.Auth
+	port     string
 }
 
-func Register(gRPC *grpc.Server, auth Auth) {
-	ssov1.RegisterAuthServer(gRPC, &serverApi{auth: auth})
+func Register(authService auth.Auth, port string) *http.Server {
+	api := ServerApi{
+		services: authService,
+		port:     port,
+	}
+	router := api.configureRouting()
+	fmt.Println("fdasdfsdfadsf %s", api.port)
+	return &http.Server{Addr: api.port, Handler: &router}
 }
+func (s *ServerApi) configureRouting() mux.Router {
+	r := *mux.NewRouter()
 
-func (s *serverApi) ValidateUser(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/register", s.RegisterUser)
+	r.HandleFunc("/validate", s.ValidateUser)
+	r.HandleFunc("/isAdmin", s.IsAdmin)
+
+	return r
+}
+func (s *ServerApi) ValidateUser(w http.ResponseWriter, r *http.Request) {
 	var req models.InitDataRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -36,8 +51,8 @@ func (s *serverApi) ValidateUser(ctx context.Context, w http.ResponseWriter, r *
 	if err := validateLogin(req, w); err != nil {
 		return
 	}
-
-	token, err := s.auth.ValidateUser(ctx, req.InitData, req.ServiceId, w)
+	ctx := r.Context()
+	token, err := s.services.ValidateUser(ctx, req.InitData, req.ServiceId, w)
 	if err != nil {
 		return
 	}
@@ -54,12 +69,12 @@ func (s *serverApi) ValidateUser(ctx context.Context, w http.ResponseWriter, r *
 func validateLogin(req models.InitDataRequest, w http.ResponseWriter) error {
 	if req.InitData == "" {
 		http.Error(w, "Юзер обязателен", http.StatusBadRequest)
-		return fmt.Errorf("Юзер обязателен")
+		return fmt.Errorf("юзер обязателен")
 	}
 
 	if req.ServiceId == 0 {
 		http.Error(w, "Неизвестный сервис", http.StatusBadRequest)
-		return fmt.Errorf("Неизвестный сервис")
+		return fmt.Errorf("неизвестный сервис")
 	}
 	return nil
 }
@@ -81,7 +96,7 @@ func validateRegister(req models.RegisterRequest, w http.ResponseWriter) error {
 
 	return nil
 }
-func (s *serverApi) Register(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+func (s *ServerApi) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -91,8 +106,8 @@ func (s *serverApi) Register(ctx context.Context, w http.ResponseWriter, r *http
 	if err := validateRegister(req, w); err != nil {
 		return
 	}
-
-	token, err := s.auth.RegisterUser(ctx, req.UserHash, req.UserNameLocale, req.ServiceID)
+	ctx := r.Context()
+	token, err := s.services.RegisterUser(ctx, req.UserHash, req.UserNameLocale, req.ServiceID)
 	if err != nil {
 		http.Error(w, "Ошибка", http.StatusInternalServerError)
 		return
@@ -107,6 +122,9 @@ func (s *serverApi) Register(ctx context.Context, w http.ResponseWriter, r *http
 	}
 }
 
-func (s *serverApi) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ssov1.IsAdminResponse, error) {
-	panic("implement me")
+func (s *ServerApi) IsAdmin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+
+	return
 }

@@ -18,7 +18,7 @@ type Config struct {
 }
 
 type GRPCConfig struct {
-	Port    int    `yaml:"port" env-default:"8080"`
+	Port    string `yaml:"port" env-default:"8080"`
 	Timeout string `yaml:"timeout" env-default:"5h"`
 }
 type TelegramConfig struct {

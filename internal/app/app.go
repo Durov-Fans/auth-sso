@@ -12,7 +12,7 @@ type App struct {
 	GRPCServer *grpcApp.App
 }
 
-func New(log *slog.Logger, grpcPort int, storageUrl string, tokenTTL time.Duration, tgToken string) *App {
+func New(log *slog.Logger, grpcPort string, storageUrl string, tokenTTL time.Duration, tgToken string) *App {
 
 	storage, err := postgres.InitDB(storageUrl)
 	if err != nil {

@@ -5,5 +5,5 @@ telegram:
   SECRET_TGID_KEY: bn24C1CCxItpZzmQujm12jo3oe8LkXdaIdwBwLY91j
   TG_BOT_KEY: 7342037359:AAHI25ES9xCOMPokpYoz-p8XVrZUdygo2J4
 grpc:
-  port: 8080
+  port: ":8080"
   timeout: 10h

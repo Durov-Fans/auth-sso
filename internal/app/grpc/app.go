@@ -2,83 +2,59 @@ package grpcApp
 
 import (
 	authgrpc "auth-service/internal/grpc/auth"
+	"auth-service/internal/services/auth"
 	"context"
-	"fmt"
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
-	"google.golang.org/grpc"
 	"log/slog"
-	"net"
+
+	"net/http"
+	"os"
+	"time"
 )
 
 type App struct {
 	log        *slog.Logger
-	gRPCServer *grpc.Server
-	port       int
+	controller *http.Server
+	port       string
 }
 
 func New(log *slog.Logger,
-	authService authgrpc.Auth,
-	port int) *App {
-	loggingOpts := []logging.Option{
-		logging.WithLogOnEvents(
-			logging.PayloadReceived, logging.PayloadSent,
-		),
-	}
+	authService *auth.Auth,
+	port string) *App {
 
-	recoveryOpts := []recovery.Option{
-		recovery.WithRecoveryHandler(func(p interface{}) (err error) {
-			log.Error("Recovered from panic", slog.Any("panic", p))
+	controllers := authgrpc.Register(*authService, port)
 
-			return status.Errorf(codes.Internal, "internal error")
-		}),
-	}
-
-	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		recovery.UnaryServerInterceptor(recoveryOpts...),
-		logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
-	))
-
-	authgrpc.Register(gRPCServer, authService)
-
-	return &App{log, gRPCServer, port}
+	return &App{log, controllers, port}
 
 }
-func InterceptorLogger(l *slog.Logger) logging.Logger {
-	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
-		l.Log(ctx, slog.Level(lvl), msg, fields...)
-	})
-}
+
 func (a *App) MustRun() {
 	if err := a.Run(); err != nil {
 		panic(err)
 	}
 }
 func (a *App) Run() error {
-	const op = "grpcapp.Run"
+	const op = "authapp.Run"
 
-	log := a.log.With(slog.String("op", op), slog.Int("port", a.port))
+	log := a.log.With(slog.String("op", op), slog.String("port", a.port))
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", a.port))
-	if err != nil {
-		return fmt.Errorf("%s: %w", op, err)
-	}
-	log.Info("start", slog.String("running on", l.Addr().String()))
-
-	if err := a.gRPCServer.Serve(l); err != nil {
-		return fmt.Errorf("%s: %w", op, err)
-	}
-
+	go func() {
+		if err := a.controller.ListenAndServe(); err != nil {
+			log.Info("start", slog.String("running on", a.port))
+		}
+	}()
 	return nil
 }
 
 func (a *App) Stop() {
-	const op = "grpcApp.Stop"
+	const op = "authApp.Stop"
 	a.log.Info("shutting down")
 	a.log.With(slog.String("op", op)).Info("stopping")
 
-	a.gRPCServer.GracefulStop()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+
+	a.controller.Shutdown(ctx)
+
+	os.Exit(0)
 }
