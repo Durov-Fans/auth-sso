@@ -7,8 +7,6 @@ import (
 	"auth-service/internal/lib/logger/sl"
 	"auth-service/internal/storage"
 	"context"
-	"net/http"
-
 	"errors"
 	"fmt"
 	initdata "github.com/telegram-mini-apps/init-data-golang"
@@ -32,8 +30,8 @@ type UserSaver interface {
 }
 
 type UserProvider interface {
-	IsAdmin(ctx context.Context, userHash string) (isAdmin bool, err error)
-	ValidateUser(ctx context.Context, userHash string) error
+	IsAdmin(ctx context.Context, tgId string) (isAdmin bool, err error)
+	ValidateUser(ctx context.Context, userHash string) (models.UserResponse, error)
 }
 type AppProvider interface {
 	App(ctx context.Context, serviceId int64) (models.App, error)
@@ -51,13 +49,13 @@ func New(log *slog.Logger, userSaver UserSaver, userProvider UserProvider, appPr
 	}
 }
 
-func (a Auth) ValidateUser(ctx context.Context, userHash string, serviceId int64, w http.ResponseWriter) (string, error) {
-	log := a.log.With(slog.String("op", "app.LoginUser"))
+func (a Auth) ValidateUser(ctx context.Context, userHash string, serviceId int64) (models.UserResponse, string, error) {
+	log := a.log.With(slog.String("op", "app.ValidateUser"))
 
-	log.Info("login user")
-	expIn := 24 * time.Hour
-	if err := initdata.Validate(userHash, a.tgToken, expIn); err != nil {
-		return "", status.Errorf(codes.Internal, "internal error")
+	log.Info("валидация пользователя")
+	//expIn := 24 * time.Hour
+	if err := initdata.Validate(userHash, a.tgToken, 0); err != nil {
+		return models.UserResponse{}, "", fmt.Errorf("validate user: %w", err)
 	}
 	userDecodeHash, err := initdata.Parse(userHash)
 
@@ -65,18 +63,19 @@ func (a Auth) ValidateUser(ctx context.Context, userHash string, serviceId int64
 	tgHash, err := crypto.HashTgID(userDecodeHash.User.ID)
 
 	if err != nil {
-		return "", status.Errorf(codes.Internal, "Ошибка хеширования")
+		return models.UserResponse{}, "", fmt.Errorf("Ошибка хеширования: %w", err)
 	}
-	err = a.userProvider.ValidateUser(ctx, tgHash)
+	user, err := a.userProvider.ValidateUser(ctx, tgHash)
 	if err != nil {
-		return "", err
+		return models.UserResponse{}, "", err
 	}
 	token, err := jwt.NewToken(tgHash, app, a.tokenTTL)
+
 	if err != nil {
-		return "", status.Errorf(codes.Internal, "Ошибка генерации токена")
+		return models.UserResponse{}, "", fmt.Errorf("Ошибка генерации токена: %w", err)
 
 	}
-	return token, nil
+	return user, token, nil
 }
 
 //func (s *Storage) User(ctx context.Context, userHash string) (models.User, error) {
@@ -126,7 +125,6 @@ func (a Auth) RegisterUser(ctx context.Context, userHash string, userNameLocale 
 		FirstName:      userDecodeHash.User.FirstName,
 		LastName:       userDecodeHash.User.LastName,
 		PhotoURL:       userDecodeHash.User.PhotoURL,
-		Hash:           userHash,
 		UserNameLocale: userNameLocale,
 		Username:       userDecodeHash.User.Username,
 		IsAdmin:        false,
@@ -134,9 +132,12 @@ func (a Auth) RegisterUser(ctx context.Context, userHash string, userNameLocale 
 	err = a.userSaver.SaveUser(ctx, tgHash, User)
 	if err != nil {
 		log.Error("Ошибка сохранениня юзера", sl.Err(err))
+
+		if errors.As(err, &storage.ErrUserExist) {
+			return "", err
+		}
 		return "", status.Errorf(codes.Internal, "internal error")
 	}
-	log.Info("asdasdadafasdfsaf")
 
 	app, err := a.appProvider.App(ctx, serviceId)
 
@@ -150,12 +151,18 @@ func (a Auth) RegisterUser(ctx context.Context, userHash string, userNameLocale 
 	log.Info("asdasddasdds")
 	return token, nil
 }
-func (a Auth) IsAdmin(ctx context.Context, userHash string) (bool, error) {
-	log := a.log.With(slog.String("op", "app.IsAdmin"), slog.String("userId", userHash))
+func (a Auth) IsAdmin(ctx context.Context, initData string) (bool, error) {
+	log := a.log.With(slog.String("op", "app.IsAdmin"))
 
 	log.Info("authorise user")
-
-	isAdmin, err := a.userProvider.IsAdmin(ctx, userHash)
+	err := initdata.Validate(initData, a.tgToken, 0)
+	if err != nil {
+		log.Error("Ошибка валидации", err)
+		return false, fmt.Errorf("Токен не прошел валидацию: %w", err)
+	}
+	userDecodeHash, err := initdata.Parse(initData)
+	tgHash, err := crypto.HashTgID(userDecodeHash.User.ID)
+	isAdmin, err := a.userProvider.IsAdmin(ctx, tgHash)
 
 	if err != nil {
 		if errors.Is(err, storage.ErrAppNotFound) {

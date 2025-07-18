@@ -4,7 +4,6 @@ import (
 	"auth-service/internal/app"
 	"auth-service/internal/config"
 	"auth-service/internal/lib/crypto"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -24,8 +23,7 @@ func main() {
 
 	application := app.New(log, cfg.GRPC.Port, cfg.Database_url, cfg.TokenTTL, cfg.Telegram.TG_BOT_KEY)
 
-	go application.GRPCServer.MustRun()
-	fmt.Println(cfg)
+	application.AuthServer.MustRun()
 
 	stop := make(chan os.Signal, 1)
 
@@ -34,7 +32,7 @@ func main() {
 	sign := <-stop
 
 	log.Info("Signal", sign.String())
-	application.GRPCServer.Stop()
+	application.AuthServer.Stop()
 	log.Info("Shutting down...")
 }
 

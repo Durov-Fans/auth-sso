@@ -1,4 +1,4 @@
-package grpcApp
+package authApp
 
 import (
 	authgrpc "auth-service/internal/grpc/auth"

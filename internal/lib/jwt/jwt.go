@@ -10,7 +10,6 @@ import (
 
 func NewToken(userID string, app models.App, duration time.Duration) (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
-
 	claims := token.Claims.(jwt.MapClaims)
 	claims["sub"] = userID
 	claims["serviceID"] = app.ID

@@ -9,7 +9,7 @@ import (
 )
 
 type App struct {
-	GRPCServer *grpcApp.App
+	AuthServer *authApp.App
 }
 
 func New(log *slog.Logger, grpcPort string, storageUrl string, tokenTTL time.Duration, tgToken string) *App {
@@ -20,8 +20,8 @@ func New(log *slog.Logger, grpcPort string, storageUrl string, tokenTTL time.Dur
 	}
 	authService := auth.New(log, storage, storage, storage, tokenTTL, tgToken)
 
-	grpcApp := grpcApp.New(log, authService, grpcPort)
+	authApp := authApp.New(log, authService, grpcPort)
 	return &App{
-		GRPCServer: grpcApp,
+		AuthServer: authApp,
 	}
 }

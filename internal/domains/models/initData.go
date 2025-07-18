@@ -1,9 +1,8 @@
 package models
 
 type InitDataRequest struct {
-	InitData       string         `json:"initData"`
-	InitDataUnsafe InitDataUnsafe `json:"initDataUnsafe"`
-	ServiceId      int64          `json:"serviceId"`
+	InitData  string `json:"initData"`
+	ServiceId int64  `json:"serviceId"`
 }
 type InitDataUnsafe struct {
 	User         TelegramUser `json:"user"`
